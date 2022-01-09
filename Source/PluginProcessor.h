@@ -54,6 +54,7 @@ public:
     void setStateInformation (const void* data, int sizeInBytes) override;
 
 private:
+    bool shouldPlaySound = true;
     //==============================================================================
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PFMProject0AudioProcessor)
 };
