@@ -53,8 +53,14 @@ public:
     void getStateInformation (juce::MemoryBlock& destData) override;
     void setStateInformation (const void* data, int sizeInBytes) override;
 
+    juce::AudioParameterBool* shouldPlaySound = nullptr;
+    juce::AudioParameterFloat* bgColor = nullptr;
+
+    static void updateAutomatableParameter(juce::RangedAudioParameter*, float value);
+    juce::AudioProcessorValueTreeState apvts;
+    
 private:
-    bool shouldPlaySound = true;
+    juce::Random r;
     //==============================================================================
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PFMProject0AudioProcessor)
 };

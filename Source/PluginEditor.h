@@ -9,12 +9,13 @@
 #pragma once
 
 #include <JuceHeader.h>
-#include "PluginProcessor.h"
+//#include "PluginProcessor.h"
 
 //==============================================================================
 /**
 */
-class PFMProject0AudioProcessorEditor  : public juce::AudioProcessorEditor
+struct PluginProcessor;
+class PFMProject0AudioProcessorEditor  : public juce::AudioProcessorEditor, public juce::Timer
 {
 public:
     PFMProject0AudioProcessorEditor (PFMProject0AudioProcessor&);
@@ -24,7 +25,18 @@ public:
     void paint (juce::Graphics&) override;
     void resized() override;
 
+    void mouseDown(const juce::MouseEvent& e) override;
+    void mouseUp(const juce::MouseEvent& e) override;
+    void mouseDrag(const juce::MouseEvent& e) override;
+
+    void timerCallback() override;
+
 private:
+
+    void update();
+    juce::Point<int> lastClickPosition;
+    float cachedBgColor = 0.f;
+
     // This reference is provided as a quick way for your editor to
     // access the processor object that created it.
     PFMProject0AudioProcessor& audioProcessor;
