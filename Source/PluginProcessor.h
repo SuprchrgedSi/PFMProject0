@@ -9,10 +9,22 @@
 #pragma once
 
 #include <JuceHeader.h>
-
+#include <array>
 //==============================================================================
 /**
 */
+
+struct BufferAnalyzer
+{
+    void prepareBuffer(double sampleRate, int samplesPerBlock);
+    void cloneBuffer(const juce::dsp::AudioBlock<float>& other );
+private:
+    std::array<juce::AudioBuffer<float>, 2> buffers;
+    juce::Atomic<bool> firstBuffer{ true };
+    std::array<size_t, 2> samplesCopied;
+};
+
+//==============================================================================
 class PFMProject0AudioProcessor  : public juce::AudioProcessor
 {
 public:
@@ -57,10 +69,11 @@ public:
     juce::AudioParameterFloat* bgColor = nullptr;
 
     static void updateAutomatableParameter(juce::RangedAudioParameter*, float value);
-    juce::AudioProcessorValueTreeState apvts;
     
 private:
+    juce::AudioProcessorValueTreeState apvts;
     juce::Random r;
+    BufferAnalyzer leftBufferAnalyzer, rightBufferAnalyzer;
     //==============================================================================
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PFMProject0AudioProcessor)
 };
