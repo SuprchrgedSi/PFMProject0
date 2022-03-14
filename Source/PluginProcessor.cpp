@@ -10,6 +10,12 @@
 #include "PluginEditor.h"
 
 //==============================================================================
+BufferAnalyzer::~BufferAnalyzer()
+{
+    notify();
+    stopThread(100);
+}
+
 void BufferAnalyzer::prepareBuffer(double sampleRate, int samplesPerBlock)
 {
     firstBuffer = true;
@@ -17,6 +23,11 @@ void BufferAnalyzer::prepareBuffer(double sampleRate, int samplesPerBlock)
     buffers[1].setSize(1, samplesPerBlock);
     samplesCopied[0] = 0;
     samplesCopied[1] = 0;
+
+    fifoIndex = 0;
+    juce::zeromem(fifoBuffer, sizeof(fifoBuffer));
+    juce::zeromem(fftData, sizeof(fftData));
+    juce::zeromem(curveData, sizeof(curveData));
 }
 
 void BufferAnalyzer::cloneBuffer(const juce::dsp::AudioBlock<float>& other)
@@ -34,7 +45,108 @@ void BufferAnalyzer::cloneBuffer(const juce::dsp::AudioBlock<float>& other)
     block.copyFrom(other);
 
     samplesCopied[whichIndex] = other.getNumSamples();
+
+    notify();
     
+}
+
+void BufferAnalyzer::run()
+{
+    while (true)
+    {
+        wait(-1);
+        
+        DBG("BufferAnalyzer::run() awake");
+
+        if (threadShouldExit())
+            break;
+
+        auto index = !firstBuffer.get() ? 0 : 1;
+        for (int i = 0; i < samplesCopied[index]; i++)
+            pushNextSampleIntoFifo(buffers[index].getSample(0,i));
+        // getSample is slow, so might use pointers
+
+    }
+}
+
+void BufferAnalyzer::pushNextSampleIntoFifo(float f)
+{
+    if (fifoIndex == fftSize)
+    {
+        if (!nextFFTBlockReady)
+        {
+
+            juce::zeromem(fftData, sizeof(fftData));
+            memcpy(fftData, fifoBuffer, sizeof(fifoBuffer));
+            nextFFTBlockReady = true;
+        }
+
+        fifoIndex = 0;
+    }
+
+    fifoBuffer[fifoIndex++] = f;
+}
+
+void BufferAnalyzer::timerCallback()
+{
+    if (nextFFTBlockReady) {
+       
+        drawNextFrameOfSpectrum();
+        nextFFTBlockReady = false;
+        repaint();
+    }
+}
+
+void BufferAnalyzer::drawNextFrameOfSpectrum()
+{
+    // first apply a windowing function to our data
+    window.multiplyWithWindowingTable(fftData, fftSize);       // [1]
+
+    // then render our FFT data..
+    forwardFFT.performFrequencyOnlyForwardTransform(fftData);  // [2]
+
+    auto mindB = -100.0f;
+    auto maxdB = 0.0f;
+
+    for (int i = 0; i < numPoints; ++i)                         // [3]
+    {
+        auto skewedProportionX = 1.0f - std::exp(std::log(1.0f - (float)i / (float)numPoints) * 0.2f);
+        auto fftDataIndex = juce::jlimit(0, fftSize / 2, (int)(skewedProportionX * (float)fftSize * 0.5f));
+        auto level = juce::jmap(juce::jlimit(mindB, maxdB, juce::Decibels::gainToDecibels(fftData[fftDataIndex])
+            - juce::Decibels::gainToDecibels((float)fftSize)),
+            mindB, maxdB, 0.0f, 1.0f);
+
+        curveData[i] = level;                                   // [4]
+    }
+}
+
+void BufferAnalyzer::paint(juce::Graphics& g)
+{
+    float width = getWidth();
+    float height = getHeight();
+    juce::Path fftCurve;
+
+    fftCurve.startNewSubPath(0, juce::jmap(curveData[0],
+                                0.f, 1.f,               // from range
+                                height, 0.f));
+
+    for (int i = 1; i < numPoints; i++)
+    {
+        auto data = curveData[i];
+        auto endX = juce::jmap((float)i, 
+                                0.f, (float)numPoints,  // from range
+                                0.f, width);            // to range
+        auto endY = juce::jmap((float)data,
+                                0.f, 1.f,               // from range
+                                height, 0.f);           // to range
+
+        fftCurve.lineTo(endX, endY);
+    }
+
+    g.fillAll(juce::Colours::black);
+
+    g.setColour(juce::Colours::white);
+    g.strokePath(fftCurve, juce::PathStrokeType(1) );
 }
 
 //==============================================================================
@@ -55,7 +167,7 @@ PFMProject0AudioProcessor::PFMProject0AudioProcessor()
     addParameter(shouldPlaySound);
     apvts.createAndAddParameter();*/
 
-    auto shouldPlaySoundParam = std::make_unique<juce::AudioParameterBool>("ShouldPlaySoundParam", "shouldPlaySound", false);
+    auto shouldPlaySoundParam = std::make_unique<juce::AudioParameterBool>("ShouldPlaySoundParam", "shouldPlaySound", true);
     
     auto* param = apvts.createAndAddParameter(std::move(shouldPlaySoundParam));
 

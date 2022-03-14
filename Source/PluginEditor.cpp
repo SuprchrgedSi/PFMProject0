@@ -15,8 +15,17 @@ PFMProject0AudioProcessorEditor::PFMProject0AudioProcessorEditor (PFMProject0Aud
 {
     // Make sure that before the constructor has finished, you've set the
     // editor's size to whatever you need it to be.
-    update();
+
+    cachedBgColor = audioProcessor.bgColor->get();
+    
+    addAndMakeVisible(audioProcessor.leftBufferAnalyzer);
+    addAndMakeVisible(audioProcessor.rightBufferAnalyzer);
+
     setSize (400, 300);
+
+    audioProcessor.leftBufferAnalyzer.setInterceptsMouseClicks(false, false);
+    audioProcessor.rightBufferAnalyzer.setInterceptsMouseClicks(false, false);
+    
 
     startTimerHz(20);
 }
@@ -29,12 +38,12 @@ PFMProject0AudioProcessorEditor::~PFMProject0AudioProcessorEditor()
 void PFMProject0AudioProcessorEditor::update()
 {
     cachedBgColor = audioProcessor.bgColor->get();
+    repaint();
 }
 
 void PFMProject0AudioProcessorEditor::timerCallback()
 {
     update();
-    repaint();
 }
 
 //==============================================================================
@@ -46,12 +55,23 @@ void PFMProject0AudioProcessorEditor::paint (juce::Graphics& g)
     g.setColour (juce::Colours::white);
     g.setFont (15.0f);
     g.drawFittedText ("Hello World!", getLocalBounds(), juce::Justification::centred, 1);
+
+    getLocalBounds().reduced(4).removeFromBottom(3).expanded(2);
 }
 
 void PFMProject0AudioProcessorEditor::resized()
 {
     // This is generally where you'll want to lay out the positions of any
     // subcomponents in your editor..
+    audioProcessor.leftBufferAnalyzer.setBounds(0, 
+                                                0, 
+                                                getWidth(), 
+                                                getHeight() * 0.5);
+    
+    audioProcessor.rightBufferAnalyzer.setBounds(0, 
+                                                 getHeight() * 0.5, 
+                                                 getWidth(), 
+                                                 getHeight() * 0.5);
 }
 
 void PFMProject0AudioProcessorEditor::mouseDown(const juce::MouseEvent& e) 
@@ -61,7 +81,7 @@ void PFMProject0AudioProcessorEditor::mouseDown(const juce::MouseEvent& e)
 
 void PFMProject0AudioProcessorEditor::mouseUp(const juce::MouseEvent& e)
 {
-    //PFMProject0AudioProcessor::updateAutomatableParameter(audioProcessor.shouldPlaySound, !audioProcessor.shouldPlaySound->get());
+    PFMProject0AudioProcessor::updateAutomatableParameter(audioProcessor.shouldPlaySound, !audioProcessor.shouldPlaySound->get());
 }
 
 void PFMProject0AudioProcessorEditor::mouseDrag(const juce::MouseEvent& e)
@@ -76,8 +96,6 @@ void PFMProject0AudioProcessorEditor::mouseDrag(const juce::MouseEvent& e)
     
     PFMProject0AudioProcessor::updateAutomatableParameter(audioProcessor.bgColor, difY);
     update();
-
-    repaint();
 
     
 }

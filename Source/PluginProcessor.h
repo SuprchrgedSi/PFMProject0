@@ -14,14 +14,43 @@
 /**
 */
 
-struct BufferAnalyzer
+struct BufferAnalyzer : juce::Thread, juce::Timer, juce::Component
 {
+    BufferAnalyzer() : Thread("BufferAnalyzer") 
+    { 
+        startThread(); 
+        startTimerHz(20);
+    }
+    ~BufferAnalyzer();
     void prepareBuffer(double sampleRate, int samplesPerBlock);
-    void cloneBuffer(const juce::dsp::AudioBlock<float>& other );
+    void cloneBuffer(const juce::dsp::AudioBlock<float>& other);
+    void run() override;
+    void timerCallback() override;
+    void paint(juce::Graphics& g) override;
 private:
     std::array<juce::AudioBuffer<float>, 2> buffers;
     juce::Atomic<bool> firstBuffer{ true };
     std::array<size_t, 2> samplesCopied;
+
+    enum
+    {
+        fftOrder = 11,
+        fftSize = 1 << fftOrder,
+        numPoints = 512
+    };
+
+    float fifoBuffer[fftSize];        
+    float fftData[2 * fftSize]; 
+    int fifoIndex = 0;          
+
+    bool nextFFTBlockReady = false;
+    void pushNextSampleIntoFifo(float);
+    float curveData[numPoints];
+
+    juce::dsp::FFT forwardFFT{ fftOrder };
+    juce::dsp::WindowingFunction<float> window{ fftSize,
+                                        juce::dsp::WindowingFunction<float>::hann };
+    void drawNextFrameOfSpectrum();
 };
 
 //==============================================================================
@@ -70,10 +99,11 @@ public:
 
     static void updateAutomatableParameter(juce::RangedAudioParameter*, float value);
     
+    BufferAnalyzer leftBufferAnalyzer, rightBufferAnalyzer;
+
 private:
     juce::AudioProcessorValueTreeState apvts;
     juce::Random r;
-    BufferAnalyzer leftBufferAnalyzer, rightBufferAnalyzer;
     //==============================================================================
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PFMProject0AudioProcessor)
 };
