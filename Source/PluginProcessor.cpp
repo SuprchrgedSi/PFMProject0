@@ -62,8 +62,11 @@ void BufferAnalyzer::run()
             break;
 
         auto index = !firstBuffer.get() ? 0 : 1;
+
+        auto* bufferPtr = buffers[index].getReadPointer(0);
+
         for (int i = 0; i < samplesCopied[index]; i++)
-            pushNextSampleIntoFifo(buffers[index].getSample(0,i));
+            pushNextSampleIntoFifo(*(bufferPtr + i));
         // getSample is slow, so might use pointers
 
     }
