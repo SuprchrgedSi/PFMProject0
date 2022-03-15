@@ -10,6 +10,14 @@
 #include "PluginEditor.h"
 
 //==============================================================================
+BufferAnalyzer::BufferAnalyzer() : Thread("BufferAnalyzer")
+{
+    startThread();
+    startTimerHz(20);
+
+    fftCurve.preallocateSpace(3 * numPoints);
+}
+
 BufferAnalyzer::~BufferAnalyzer()
 {
     notify();
@@ -21,8 +29,8 @@ void BufferAnalyzer::prepareBuffer(double sampleRate, int samplesPerBlock)
     firstBuffer = true;
     buffers[0].setSize(1, samplesPerBlock);
     buffers[1].setSize(1, samplesPerBlock);
-    samplesCopied[0] = 0;
-    samplesCopied[1] = 0;
+    samplesCopied[0].set(0);
+    samplesCopied[1].set(0);
 
     fifoIndex = 0;
     juce::zeromem(fifoBuffer, sizeof(fifoBuffer));
@@ -44,7 +52,7 @@ void BufferAnalyzer::cloneBuffer(const juce::dsp::AudioBlock<float>& other)
     juce::dsp::AudioBlock<float> block(buffers[whichIndex]);
     block.copyFrom(other);
 
-    samplesCopied[whichIndex] = other.getNumSamples();
+    samplesCopied[whichIndex].set( other.getNumSamples() );
 
     notify();
     
@@ -63,9 +71,10 @@ void BufferAnalyzer::run()
 
         auto index = !firstBuffer.get() ? 0 : 1;
 
+        auto numSamples = samplesCopied[index].get();
         auto* bufferPtr = buffers[index].getReadPointer(0);
 
-        for (int i = 0; i < samplesCopied[index]; i++)
+        for (int i = 0; i < numSamples; i++)
             pushNextSampleIntoFifo(*(bufferPtr + i));
         // getSample is slow, so might use pointers
 
@@ -76,12 +85,13 @@ void BufferAnalyzer::pushNextSampleIntoFifo(float f)
 {
     if (fifoIndex == fftSize)
     {
-        if (!nextFFTBlockReady)
+        auto ready = nextFFTBlockReady.get();
+        if (!ready)
         {
 
             juce::zeromem(fftData, sizeof(fftData));
             memcpy(fftData, fifoBuffer, sizeof(fifoBuffer));
-            nextFFTBlockReady = true;
+            nextFFTBlockReady.set(true);
         }
 
         fifoIndex = 0;
@@ -92,10 +102,11 @@ void BufferAnalyzer::pushNextSampleIntoFifo(float f)
 
 void BufferAnalyzer::timerCallback()
 {
-    if (nextFFTBlockReady) {
+    auto ready = nextFFTBlockReady.get();
+    if (ready) {
        
         drawNextFrameOfSpectrum();
-        nextFFTBlockReady = false;
+        nextFFTBlockReady.set(false);
         repaint();
     }
 }
@@ -127,7 +138,8 @@ void BufferAnalyzer::paint(juce::Graphics& g)
 {
     float width = getWidth();
     float height = getHeight();
-    juce::Path fftCurve;
+
+    fftCurve.clear();
 
     fftCurve.startNewSubPath(0, juce::jmap(curveData[0],
                                 0.f, 1.f,               // from range
@@ -148,7 +160,31 @@ void BufferAnalyzer::paint(juce::Graphics& g)
 
     g.fillAll(juce::Colours::black);
 
-    g.setColour(juce::Colours::white);
+    //g.setColour(juce::Colours::white);
+    juce::ColourGradient cg;
+
+    auto colours = std::vector<juce::Colour>
+    {
+        juce::Colours::violet,
+        juce::Colours::indigo,
+        juce::Colours::blue,
+        juce::Colours::green,
+        juce::Colours::yellow,
+        juce::Colours::orange,
+        juce::Colours::red,
+        juce::Colours::white
+    };
+
+
+    for (int i = 0; i < colours.size(); i++)
+    {
+        cg.addColour((double)i / (double)(colours.size() - 1), colours[i]);
+    }
+
+    cg.point1 = { 0, height };
+    cg.point2 = { 0, 0 };
+
+    g.setGradientFill(cg);
     g.strokePath(fftCurve, juce::PathStrokeType(1) );
 }
 
